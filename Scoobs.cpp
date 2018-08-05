@@ -54,6 +54,7 @@
 #include <dlib/image_io.h>
 #include <dlib/opencv.h>
 #include <iostream>
+#include <algorithm> 
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -118,135 +119,95 @@ int main(int argc, char **argv)
                 shapes.push_back(shape);
             }
 
+            // get edge
             // this is for edge detection
-            cv::Mat src = imread(argv[i]);
+            cv::Mat src = dlib::toMat(img);
 
             cv::Mat cannyImg;
             cv::Mat gray_image;
 
             cvtColor(src, gray_image, CV_RGB2GRAY );
 
-            cv::Canny(src,cannyImg,35,90);
+            cv::Canny(src,cannyImg,35,120);
 
             imshow("Canny Image", cannyImg);
 
-            imshow("gray Image", gray_image);
-
-            // Change the background from white to black, since that will help later to extract
-            // better results during the use of Distance Transform
-            for( int x = 0; x < src.rows; x++ ) {
-                for( int y = 0; y < src.cols; y++ ) {
-                    if ( src.at<Vec3b>(x, y) == Vec3b(255,255,255) ) {
-                        src.at<Vec3b>(x, y)[0] = 0;
-                        src.at<Vec3b>(x, y)[1] = 0;
-                        src.at<Vec3b>(x, y)[2] = 0;
-                    }
-                }
-            }
-            // Show output image
-            imshow("Black Background Image", src);
-
-            // Create a kernel that we will use for accuting/sharpening our image
-            Mat kernel = (Mat_<float>(3,3) <<
-                    1,  1, 1,
-                    1, -8, 1,
-                    1,  1, 1); // an approximation of second derivative, a quite strong kernel
-            // do the laplacian filtering as it is
-            // well, we need to convert everything in something more deeper then CV_8U
-            // because the kernel has some negative values,
-            // and we can expect in general to have a Laplacian image with negative values
-            // BUT a 8bits unsigned int (the one we are working with) can contain values from 0 to 255
-            // so the possible negative number will be truncated
-            cv::Mat imgLaplacian;
-            cv::Mat sharp = src; // copy source image to another temporary one
-            filter2D(sharp, imgLaplacian, CV_32F, kernel);
-            src.convertTo(sharp, CV_32F);
-            cv::Mat imgResult = sharp - imgLaplacian;
-            // convert back to 8bits gray scale
-            imgResult.convertTo(imgResult, CV_8UC3);
-            imgLaplacian.convertTo(imgLaplacian, CV_8UC3);
-            // imshow( "Laplace Filtered Image", imgLaplacian );
-            cv::imshow( "New Sharped Image", imgResult );
-
-            // Create binary image from source image
-            cv::Mat bw;
-            cv::cvtColor(src, bw, CV_BGR2GRAY);
-            cv::threshold(bw, bw, 0, 255, CV_THRESH_BINARY | CV_THRESH_OTSU);
-            cv::imshow("Binary Image", bw);
-
-            // Perform the distance transform algorithm
-            cv::Mat dist;
-            cv::distanceTransform(bw, dist, CV_DIST_L2, 3);
-            // Normalize the distance image for range = {0.0, 1.0}
-            // so we can visualize and threshold it
-            cv::normalize(dist, dist, 0, 1., NORM_MINMAX);
-            imshow("Distance Transform Image", dist);
-
-            // Threshold to obtain the peaks
-            // This will be the markers for the foreground objects
-            cv::threshold(dist, dist, 0.4, 1.0, THRESH_BINARY);
-            // Dilate a bit the dist image
-            cv::Mat kernel1 = Mat::ones(3, 3, CV_8U);
-            cv::dilate(dist, dist, kernel1);
-            cv::imshow("Peaks", dist);
-
-            // Create the CV_8U version of the distance image
-            // It is needed for findContours()
-            cv::Mat dist_8u;
-            dist.convertTo(dist_8u, CV_8U);
-            // Find total markers
-            std::vector<std::vector<Point> > contours;
-            findContours(dist_8u, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-            // Create the marker image for the watershed algorithm
-            cv::Mat markers = Mat::zeros(dist.size(), CV_32S);
-            // Draw the foreground markers
-            for (size_t i = 0; i < contours.size(); i++)
-            {
-                drawContours(markers, contours, static_cast<int>(i), Scalar(static_cast<int>(i)+1), -1);
-            }
-            // Draw the background marker
-            circle(markers, Point(5,5), 3, Scalar(255), -1);
-            imshow("Markers", markers*10000);
-
-            // Perform the watershed algorithm
-            watershed(imgResult, markers);
-            cv::Mat mark;
-            markers.convertTo(mark, CV_8U);
-            bitwise_not(mark, mark);
-            imshow("Markers_v2", mark); // uncomment this if you want to see how the mark
-            // image looks like at that point
-            // Generate random colors
-            std::vector<Vec3b> colors;
-            for (size_t i = 0; i < contours.size(); i++)
-            {
-                int b = theRNG().uniform(0, 256);
-                int g = theRNG().uniform(0, 256);
-                int r = theRNG().uniform(0, 256);
-                colors.push_back(Vec3b((uchar)b, (uchar)g, (uchar)r));
-            }
-            // Create the result image
-            Mat dst = Mat::zeros(markers.size(), CV_8UC3);
-            // Fill labeled objects with random colors
-            for (int i = 0; i < markers.rows; i++)
-            {
-                for (int j = 0; j < markers.cols; j++)
+            array2d<rgb_pixel> newImg;
+            load_image(img, argv[i]);
+            newImg.set_size(img.nr(), img.nc());
+            cout << "Image dimensions: " << img.nr() << " " << img.nc() << endl;
+            cout << "Canny dim: " << cannyImg.rows << " " << cannyImg.cols << endl;
+            int ksize = 5;
+            int rsum, gsum, bsum;
+            for (int fuckme = 0; fuckme < 100; fuckme++) {
+            //loop through image
+                for(int r=0; r<newImg.nr()-1; r++)
                 {
-                    int index = markers.at<int>(i,j);
-                    if (index > 0 && index <= static_cast<int>(contours.size()))
+                    for(int c=0; c<newImg.nc()-1; c++)
                     {
-                        dst.at<Vec3b>(i,j) = colors[index-1];
+                        rsum=0;
+                        gsum=0;
+                        bsum=0;
+
+                        double left = 0;
+                        double top = 0;
+                        double right = newImg.nc() - 1;
+                        int bottom = newImg.nr() - 1;
+                        int rstart = (r-(ksize/2)) < 0 ? 0 : (r-(ksize/2)); //std::max(0, );
+                        int rend = (r+(ksize/2)) > right ? right: (r+(ksize/2)); //std::min(r+(ksize/2), ); 
+                        int cstart = (c-(ksize/2)) < 0 ? 0 : (c-(ksize/2));// std::max(0, (c-(ksize/2)));
+                        int cend = (c+(ksize/2)) > bottom ? bottom : (c+(ksize/2)); // std::min(c+(ksize/2),  );
+
+                        int count = 0;
+                        int edgeCount = 0;
+                        int shouldIgnore = 0;
+                        //loop through kmatrix
+                        for(int xc=rstart; xc<=rend; xc++)
+                        {
+                            for(int yc=cstart; yc<=cend; yc++)
+                            {
+                                //handle is it edge or is it part of another block here
+                                cv::Vec3b newVal = cannyImg.at<cv::Vec3b>(xc,yc);
+                                int isEdgeR = newVal[0];
+                                int isEdgeG = newVal[1];
+                                int isEdgeB = newVal[2];
+                                if (isEdgeR != 0 || isEdgeG != 0 || isEdgeB != 0) {
+                                    edgeCount++;
+                                    if (edgeCount > 0) {
+                                        shouldIgnore = 1;
+                                    }
+                                } else {
+                                    count++;
+                                    rsum+=(int)img[xc][yc].red;
+                                    gsum+=(int)img[xc][yc].green;
+                                    bsum+=(int)img[xc][yc].blue;
+                                }
+                            }
+                        }
+
+                        if (shouldIgnore == 0) {
+                            int avgR = (int) ((double) rsum)/count;
+                            int avgG = (int) ((double) gsum)/count;
+                            int avgB = (int) ((double) bsum)/count;
+
+                            if (avgR > 255 || avgB > 255 || avgG > 255) {
+                                cout << "Squid " + avgR + avgB + avgG <<endl; 
+                            }
+
+                            newImg[r][c].red = avgR;
+                            newImg[r][c].green = avgG;
+                            newImg[r][c].blue = avgB;
+                        }
+
                     }
                 }
+                
+                img.swap(newImg);
             }
-            // Visualize the final image
-            imshow("Final Result", dst);
-
-            dlib::array2d<rgb_pixel> dlibImage;
-            dlib::assign_image(dlibImage, dlib::cv_image<rgb_pixel>(dst));
 
             // Now let's view our face poses on the screen.
             win.clear_overlay();
-            win.set_image(dlibImage);
+            win.set_image(img);
             win.add_overlay(render_face_detections(shapes));
             
             cv::waitKey(0);
