@@ -107,6 +107,19 @@ int main(int argc, char **argv)
             cout << "processing image " << argv[i] << endl;
             dlib::array2d<rgb_pixel> img;
             load_image(img, argv[i]);
+            array2d<rgb_pixel> newImg;
+            newImg.set_size(img.nr(), img.nc());
+            // get edge
+            // this is for edge detection
+            cv::Mat src = dlib::toMat(img);
+
+            cv::Mat cannyImg;
+            cv::Mat gray_image;
+
+            cvtColor(src, gray_image, CV_RGB2GRAY);
+
+            cv::Canny(src, cannyImg, 80, 90);
+
             double start_time = omp_get_wtime();
             #pragma omp parallel 
             {
@@ -131,22 +144,7 @@ int main(int argc, char **argv)
                         shapes.push_back(shape);
                     }
                 }
-                // get edge
-                // this is for edge detection
-                cv::Mat src = dlib::toMat(img);
-
-                cv::Mat cannyImg;
-                cv::Mat gray_image;
-
-                cvtColor(src, gray_image, CV_RGB2GRAY );
-
-                cv::Canny(src, cannyImg, 80, 90);
-
                 // imshow("Original Image", src);
-
-                array2d<rgb_pixel> newImg;
-                load_image(img, argv[i]);
-                newImg.set_size(img.nr(), img.nc());
                 
                 #pragma omp single
                 {
@@ -154,7 +152,6 @@ int main(int argc, char **argv)
                     cout << "Canny dim: " << cannyImg.rows << " " << cannyImg.cols << endl;
                 }
                 int ksize = 10;
-                int rsum, gsum, bsum;
                 for (int blurRate = 0; blurRate < 10; blurRate++)
                 {
                     //loop through image
@@ -163,9 +160,9 @@ int main(int argc, char **argv)
                     {
                         for(int c=0; c<newImg.nc()-1; c++)
                         {
-                            rsum=0;
-                            gsum=0;
-                            bsum=0;
+                            int rsum=0;
+                            int gsum=0;
+                            int bsum=0;
 
                             double left = 0;
                             double top = 0;
