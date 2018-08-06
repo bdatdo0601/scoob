@@ -83,7 +83,7 @@ int main(int argc, char **argv)
             cout << "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2" << endl;
             return 0;
         }
-
+       
         // We need a face detector.  We will use this to get bounding boxes for
         // each face in an image.
         frontal_face_detector detector = dlib::get_frontal_face_detector();
@@ -168,13 +168,13 @@ int main(int argc, char **argv)
             imgResult.convertTo(imgResult, CV_8UC3);
             imgLaplacian.convertTo(imgLaplacian, CV_8UC3);
             // imshow( "Laplace Filtered Image", imgLaplacian );
-            cv::imshow( "New Sharped Image", imgResult );
+            // cv::imshow( "New Sharped Image", imgResult );
 
             // Create binary image from source image
             cv::Mat bw;
             cv::cvtColor(src, bw, CV_BGR2GRAY);
             cv::threshold(bw, bw, 0, 255, CV_THRESH_BINARY | CV_THRESH_OTSU);
-            cv::imshow("Binary Image", bw);
+            // cv::imshow("Binary Image", bw);
 
             // Perform the distance transform algorithm
             cv::Mat dist;
@@ -182,7 +182,7 @@ int main(int argc, char **argv)
             // Normalize the distance image for range = {0.0, 1.0}
             // so we can visualize and threshold it
             cv::normalize(dist, dist, 0, 1., NORM_MINMAX);
-            imshow("Distance Transform Image", dist);
+            // imshow("Distance Transform Image", dist);
 
             // Threshold to obtain the peaks
             // This will be the markers for the foreground objects
@@ -190,7 +190,7 @@ int main(int argc, char **argv)
             // Dilate a bit the dist image
             cv::Mat kernel1 = Mat::ones(3, 3, CV_8U);
             cv::dilate(dist, dist, kernel1);
-            cv::imshow("Peaks", dist);
+            // cv::imshow("Peaks", dist);
 
             // Create the CV_8U version of the distance image
             // It is needed for findContours()
@@ -208,14 +208,14 @@ int main(int argc, char **argv)
             }
             // Draw the background marker
             circle(markers, Point(5,5), 3, Scalar(255), -1);
-            imshow("Markers", markers*10000);
+            // imshow("Markers", markers*10000);
 
             // Perform the watershed algorithm
             watershed(imgResult, markers);
             cv::Mat mark;
             markers.convertTo(mark, CV_8U);
             bitwise_not(mark, mark);
-            imshow("Markers_v2", mark); // uncomment this if you want to see how the mark
+            // imshow("Markers_v2", mark); // uncomment this if you want to see how the mark
             // image looks like at that point
             // Generate random colors
             std::vector<Vec3b> colors;
@@ -284,7 +284,7 @@ int main(int argc, char **argv)
                 std::vector<cv::Point> mouth;
                 mouth.push_back(getPointFromDlib(face, 48));
                 mouth.push_back(getPointFromDlib(face, 67));
-                mouth.push_back(getPointFromDlib(face, 62));
+                mouth.push_back(getPointFromDlib(face, 66));
                 mouth.push_back(getPointFromDlib(face, 65));
                 mouth.push_back(getPointFromDlib(face, 54));
 
