@@ -55,6 +55,7 @@
 #include <dlib/opencv.h>
 #include <iostream>
 #include <algorithm> 
+#include <omp.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -65,6 +66,11 @@ using namespace dlib;
 using namespace std;
 
 // ----------------------------------------------------------------------------------------
+
+cv::Point getPointFromDlib(full_object_detection face, int location) {
+    dlib::point pt = face.part(location);
+    return cv::Point(pt.x(), pt.y());
+}
 
 int main(int argc, char **argv)
 {
@@ -97,119 +103,206 @@ int main(int argc, char **argv)
         // Loop over all the images provided on the command line.
         for (int i = 2; i < argc; ++i)
         {
+            std::vector<full_object_detection> shapes;
             cout << "processing image " << argv[i] << endl;
             dlib::array2d<rgb_pixel> img;
             load_image(img, argv[i]);
-            // Make the image larger so we can detect small faces.
-            // pyramid_up(img);
-
-            // Now tell the face detector to give us a list of bounding boxes
-            // around all the faces in the image.
-            std::vector<dlib::rectangle> dets = detector(img);
-            cout << "Number of faces detected: " << dets.size() << endl;
-
-            // Now we will go ask the shape_predictor to tell us the pose of
-            // each face we detected.
-            std::vector<full_object_detection> shapes;
-            for (unsigned long j = 0; j < dets.size(); ++j)
+            double start_time = omp_get_wtime();
+            #pragma omp parallel 
             {
-                full_object_detection shape = sp(img, dets[j]);
-                cout << "number of parts detected: " << shape.num_parts() << endl;
-                // shape will contains the list of all point on the image that is facial landmarks
-                shapes.push_back(shape);
-            }
+                
+                // Make the image larger so we can detect small faces.
+                // pyramid_up(img);
 
-            // get edge
-            // this is for edge detection
-            cv::Mat src = dlib::toMat(img);
-
-            cv::Mat cannyImg;
-            cv::Mat gray_image;
-
-            cvtColor(src, gray_image, CV_RGB2GRAY );
-
-            cv::Canny(src,cannyImg,35,120);
-
-            imshow("Canny Image", cannyImg);
-
-            array2d<rgb_pixel> newImg;
-            load_image(img, argv[i]);
-            newImg.set_size(img.nr(), img.nc());
-            cout << "Image dimensions: " << img.nr() << " " << img.nc() << endl;
-            cout << "Canny dim: " << cannyImg.rows << " " << cannyImg.cols << endl;
-            int ksize = 5;
-            int rsum, gsum, bsum;
-            for (int fuckme = 0; fuckme < 100; fuckme++) {
-            //loop through image
-                for(int r=0; r<newImg.nr()-1; r++)
+                #pragma omp single 
                 {
-                    for(int c=0; c<newImg.nc()-1; c++)
+                    // Now tell the face detector to give us a list of bounding boxes
+                    // around all the faces in the image.
+                    std::vector<dlib::rectangle> dets = detector(img);
+                    cout << "Number of faces detected: " << dets.size() << endl;
+
+                    // Now we will go ask the shape_predictor to tell us the pose of
+                    // each face we detected.
+                    for (unsigned long j = 0; j < dets.size(); ++j)
                     {
-                        rsum=0;
-                        gsum=0;
-                        bsum=0;
-
-                        double left = 0;
-                        double top = 0;
-                        double right = newImg.nc() - 1;
-                        int bottom = newImg.nr() - 1;
-                        int rstart = (r-(ksize/2)) < 0 ? 0 : (r-(ksize/2)); //std::max(0, );
-                        int rend = (r+(ksize/2)) > right ? right: (r+(ksize/2)); //std::min(r+(ksize/2), ); 
-                        int cstart = (c-(ksize/2)) < 0 ? 0 : (c-(ksize/2));// std::max(0, (c-(ksize/2)));
-                        int cend = (c+(ksize/2)) > bottom ? bottom : (c+(ksize/2)); // std::min(c+(ksize/2),  );
-
-                        int count = 0;
-                        int edgeCount = 0;
-                        int shouldIgnore = 0;
-                        //loop through kmatrix
-                        for(int xc=rstart; xc<=rend; xc++)
-                        {
-                            for(int yc=cstart; yc<=cend; yc++)
-                            {
-                                //handle is it edge or is it part of another block here
-                                cv::Vec3b newVal = cannyImg.at<cv::Vec3b>(xc,yc);
-                                int isEdgeR = newVal[0];
-                                int isEdgeG = newVal[1];
-                                int isEdgeB = newVal[2];
-                                if (isEdgeR != 0 || isEdgeG != 0 || isEdgeB != 0) {
-                                    edgeCount++;
-                                    if (edgeCount > 0) {
-                                        shouldIgnore = 1;
-                                    }
-                                } else {
-                                    count++;
-                                    rsum+=(int)img[xc][yc].red;
-                                    gsum+=(int)img[xc][yc].green;
-                                    bsum+=(int)img[xc][yc].blue;
-                                }
-                            }
-                        }
-
-                        if (shouldIgnore == 0) {
-                            int avgR = (int) ((double) rsum)/count;
-                            int avgG = (int) ((double) gsum)/count;
-                            int avgB = (int) ((double) bsum)/count;
-
-                            if (avgR > 255 || avgB > 255 || avgG > 255) {
-                                cout << "Squid " + avgR + avgB + avgG <<endl; 
-                            }
-
-                            newImg[r][c].red = avgR;
-                            newImg[r][c].green = avgG;
-                            newImg[r][c].blue = avgB;
-                        }
-
+                        full_object_detection shape = sp(img, dets[j]);
+                        cout << "number of parts detected: " << shape.num_parts() << endl;
+                        // shape will contains the list of all point on the image that is facial landmarks
+                        shapes.push_back(shape);
                     }
                 }
+                // get edge
+                // this is for edge detection
+                cv::Mat src = dlib::toMat(img);
+
+                cv::Mat cannyImg;
+                cv::Mat gray_image;
+
+                cvtColor(src, gray_image, CV_RGB2GRAY );
+
+                cv::Canny(src, cannyImg, 80, 90);
+
+                // imshow("Original Image", src);
+
+                array2d<rgb_pixel> newImg;
+                load_image(img, argv[i]);
+                newImg.set_size(img.nr(), img.nc());
                 
-                img.swap(newImg);
+                #pragma omp single
+                {
+                    cout << "Image dimensions: " << img.nr() << " " << img.nc() << endl;
+                    cout << "Canny dim: " << cannyImg.rows << " " << cannyImg.cols << endl;
+                }
+                int ksize = 10;
+                int rsum, gsum, bsum;
+                for (int blurRate = 0; blurRate < 10; blurRate++)
+                {
+                    //loop through image
+                    #pragma omp for
+                    for(int r=0; r<newImg.nr()-1; r++)
+                    {
+                        for(int c=0; c<newImg.nc()-1; c++)
+                        {
+                            rsum=0;
+                            gsum=0;
+                            bsum=0;
+
+                            double left = 0;
+                            double top = 0;
+                            double right = newImg.nc() - 1;
+                            int bottom = newImg.nr() - 1;
+                            int rstart = (r-(ksize/2)) < 0 ? 0 : (r-(ksize/2)); //std::max(0, );
+                            int rend = (r+(ksize/2)) > right ? right: (r+(ksize/2)); //std::min(r+(ksize/2), ); 
+                            int cstart = (c-(ksize/2)) < 0 ? 0 : (c-(ksize/2));// std::max(0, (c-(ksize/2)));
+                            int cend = (c+(ksize/2)) > bottom ? bottom : (c+(ksize/2)); // std::min(c+(ksize/2),  );
+
+                            int count = 0;
+                            int edgeCount = 0;
+                            int shouldIgnore = 0;
+                            //loop through kmatrix
+                            for(int xc=rstart; xc<=rend; xc++)
+                            {
+                                for(int yc=cstart; yc<=cend; yc++)
+                                {
+                                    //handle is it edge or is it part of another block here
+                                    cv::Vec3b newVal = cannyImg.at<cv::Vec3b>(xc,yc/3);
+                                    int isEdgeR = newVal[0];
+                                    int isEdgeG = newVal[1];
+                                    int isEdgeB = newVal[2];
+                                    if (isEdgeR != 0 || isEdgeG != 0 || isEdgeB != 0) {
+                                        edgeCount++;
+                                        if (edgeCount > ksize*(ksize-1)) {
+                                            shouldIgnore = 1;
+                                        }
+                                        newImg[xc][yc].red = 0;
+                                        newImg[xc][yc].green = 0;
+                                        newImg[xc][yc].blue = 0;
+                                    } else {
+                                        count++;
+                                        rsum+=(int)img[xc][yc].red;
+                                        gsum+=(int)img[xc][yc].green;
+                                        bsum+=(int)img[xc][yc].blue;
+                                    }
+                                }
+                            }
+            
+                            if (shouldIgnore == 0 && count > 0) {
+                                int avgR = (int) ((double) rsum)/count;
+                                int avgG = (int) ((double) gsum)/count;
+                                int avgB = (int) ((double) bsum)/count;
+
+                                newImg[r][c].red = avgR;
+                                newImg[r][c].green = avgG;
+                                newImg[r][c].blue = avgB;
+                            }
+
+                        }
+                    }
+                    img.swap(newImg);
+                }
             }
 
-            // Now let's view our face poses on the screen.
-            win.clear_overlay();
-            win.set_image(img);
-            win.add_overlay(render_face_detections(shapes));
+            cv::Mat dst;
+            cv::cvtColor(dlib::toMat(img), dst, CV_BGR2RGB);
+            double end_time = omp_get_wtime();
+
+            cout << "Time Elapsed " << end_time - start_time << endl;
+            // convert facial landmark to opencv
+            for (int i = 0; i < shapes.size(); i++)
+            {
+                dlib::full_object_detection face = shapes[i];
+                std::vector<cv::Point> left_eyebrows;
+                for (int point = 17; point <= 21; point++)
+                {
+                    left_eyebrows.push_back(getPointFromDlib(face, point));
+                }
+
+                std::vector<cv::Point> right_eyebrows;
+                for (int point = 22; point <= 26; point++)
+                {
+                    right_eyebrows.push_back(getPointFromDlib(face, point));
+                }
+
+                std::vector<cv::Point> left_eye;
+                for (int point = 36; point <= 38; point++)
+                {
+                    left_eye.push_back(getPointFromDlib(face, point));
+                }
+                dlib::point point_38 = face.part(38);
+                dlib::point point_39 = face.part(39);
+                int avg39Y = (((point_39.y() + point_38.y()) / (2.0)));
+                left_eye.push_back(cv::Point(point_39.x(), avg39Y));
+                int avgLeftEyeY = (point_39.y() + point_38.y()) / (2.0);
+                int avgLeftEyeX = (point_39.x() + point_38.x()) / (2.0);
+                int radius_left_eye = sqrt(pow(point_38.x() - avgLeftEyeX, 2) + pow(point_39.y() - avgLeftEyeY, 2));
+
+                std::vector<cv::Point> right_eye;
+                dlib::point point_43 = face.part(43);
+                dlib::point point_42 = face.part(42);
+                int avg42Y = (((point_42.y() + point_43.y()) / (2.0)));
+                right_eye.push_back(cv::Point(point_42.x(), avg42Y));
+                int avgRightEyeY = (point_42.y() + point_43.y()) / (2.0);
+                int avgRightEyeX = (point_42.x() + point_43.x()) / (2.0);
+                int radius_right_eye = sqrt(pow(point_43.x() - avgRightEyeX, 2) + pow(point_42.y() - avgRightEyeY, 2));
+                for (int point = 43; point <= 45; point++)
+                {
+                    right_eye.push_back(getPointFromDlib(face, point));
+                }
+
+                std::vector<cv::Point> mouth;
+                mouth.push_back(getPointFromDlib(face, 48));
+                mouth.push_back(getPointFromDlib(face, 67));
+                mouth.push_back(getPointFromDlib(face, 66));
+                mouth.push_back(getPointFromDlib(face, 65));
+                mouth.push_back(getPointFromDlib(face, 54));
+
+                std::vector<cv::Point> face_border;
+                for (int point = 5; point <= 16; point++)
+                {
+                    face_border.push_back(getPointFromDlib(face, point));
+                }
+
+                cv::circle(dst, getPointFromDlib(face, 32), radius_left_eye / 4, Scalar(1, 1, 1), -1);
+                cv::circle(dst, getPointFromDlib(face, 34), radius_left_eye / 4, Scalar(1, 1, 1), -1);
+                cv::circle(dst, cv::Point(point_38.x(), point_39.y()), radius_left_eye, Scalar(1, 1, 1), -1);
+                cv::circle(dst, cv::Point(point_43.x(), point_42.y()), radius_right_eye, Scalar(1, 1, 1), -1);
+
+                // draws the curve using polylines and line width (BLACK)
+                cv::polylines(dst, mouth, false, Scalar(1, 1, 1), (point_39.x() - point_38.x()) / 4.25);
+                cv::polylines(dst, right_eye, false, Scalar(1, 1, 1), (point_39.x() - point_38.x()) / 4.2);
+                cv::polylines(dst, left_eye, false, Scalar(1, 1, 1), (point_39.x() - point_38.x()) / 4.2);
+                cv::polylines(dst, left_eyebrows, false, Scalar(1, 1, 1), (point_39.x() - point_38.x()) / 6.15);
+                cv::polylines(dst, right_eyebrows, false, Scalar(1, 1, 1), (point_39.x() - point_38.x()) / 6.15);
+                cv::polylines(dst, face_border, false, Scalar(1, 1, 1), (point_39.x() - point_38.x()) / 6.15);
+            }
             
+            // Now let's view our face poses on the screen for dlib.
+            // win.clear_overlay();
+            // win.set_image(img);
+            // win.add_overlay(render_face_detections(shapes));
+            imshow("result", dst);
+            
+
             cv::waitKey(0);
 
             cout << "Hit enter to process the next image..." << endl;
