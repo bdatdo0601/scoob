@@ -111,6 +111,7 @@ int main(int argc, char **argv)
             newImg.set_size(img.nr(), img.nc());
             // get edge
             // this is for edge detection
+
             cv::Mat src = dlib::toMat(img);
 
             cv::Mat cannyImg;
@@ -120,6 +121,10 @@ int main(int argc, char **argv)
 
             cv::Canny(src, cannyImg, 80, 90);
 
+            imshow("original image", src);
+
+            imshow("Canny Edge", cannyImg);
+            
             double start_time = omp_get_wtime();
             #pragma omp parallel 
             {
@@ -151,11 +156,12 @@ int main(int argc, char **argv)
                     cout << "Image dimensions: " << img.nr() << " " << img.nc() << endl;
                     cout << "Canny dim: " << cannyImg.rows << " " << cannyImg.cols << endl;
                 }
+
                 int ksize = 10;
                 for (int blurRate = 0; blurRate < 10; blurRate++)
                 {
                     //loop through image
-                    #pragma omp for
+                    #pragma omp for schedule(dynamic)
                     for(int r=0; r<newImg.nr()-1; r++)
                     {
                         for(int c=0; c<newImg.nc()-1; c++)
@@ -190,10 +196,12 @@ int main(int argc, char **argv)
                                         edgeCount++;
                                         if (edgeCount > ksize*(ksize-1)) {
                                             shouldIgnore = 1;
+                                            break;
                                         }
                                         newImg[xc][yc].red = 0;
                                         newImg[xc][yc].green = 0;
                                         newImg[xc][yc].blue = 0;
+                                    
                                     } else {
                                         count++;
                                         rsum+=(int)img[xc][yc].red;
