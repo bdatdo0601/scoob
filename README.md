@@ -36,7 +36,7 @@ Haven't tested but there is this post that detail on how to install OpenCV & CMa
 1. Open your Terminal or Powershell, locate to the repository
 2. Create a build folder (`mkdir build`)
 3. Change directory to build folder (`cd build/`)
-4. Generate makefiles with CMake (`cmake ..`). This should take a while
+4. Generate makefiles with CMake (`cmake -D CMAKE_CXX_COMPILER=g++-8 -D CMAKE_C_COMPILER=gcc-8 ..`). This should take a while
 5. Once done, a Makefile will be generated. Compile the project (`make -j4`). `-j4` tell your machine to compile with all 4 cores to increase speed. This should take a while
 6. Once completed, you will be left with a single executable `Scoobs`, which is our project.
 
