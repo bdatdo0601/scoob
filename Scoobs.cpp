@@ -65,6 +65,8 @@ using namespace std;
 
 // ----------------------------------------------------------------------------------------
 
+cv::Point getPointFromDlib(dlib::full_object_detection face, int location);
+
 int main(int argc, char **argv)
 {
     try
@@ -219,9 +221,10 @@ int main(int argc, char **argv)
             std::vector<Vec3b> colors;
             for (size_t i = 0; i < contours.size(); i++)
             {
-                int b = theRNG().uniform(0, 256);
-                int g = theRNG().uniform(0, 256);
-                int r = theRNG().uniform(0, 256);
+                int b = 139;
+                int g = 197;
+                int r = 255;
+
                 colors.push_back(Vec3b((uchar)b, (uchar)g, (uchar)r));
             }
             // Create the result image
@@ -238,16 +241,88 @@ int main(int argc, char **argv)
                     }
                 }
             }
+
+
+
+            // convert facial landmark to opencv
+            for (int i = 0; i < shapes.size(); i++) {
+                dlib::full_object_detection face = shapes[i];
+                std::vector<cv::Point> left_eyebrows;
+                for (int point = 17; point <= 21; point++) {
+                    left_eyebrows.push_back(getPointFromDlib(face, point));
+                }
+
+                std::vector<cv::Point> right_eyebrows;
+                for (int point = 22; point <= 26; point++) {
+                    right_eyebrows.push_back(getPointFromDlib(face, point));
+                }
+
+                std::vector<cv::Point> left_eye;
+                for (int point = 36; point <= 38; point++) {
+                    left_eye.push_back(getPointFromDlib(face, point));
+                }
+                dlib::point point_38 = face.part(38);
+                dlib::point point_39 = face.part(39);
+                int avg39Y = (((point_39.y() + point_38.y())/(2.0)));
+                left_eye.push_back(cv::Point(point_39.x(), avg39Y));
+                int avgLeftEyeY = (point_39.y() + point_38.y())/(2.0);
+                int avgLeftEyeX = (point_39.x() + point_38.x())/(2.0);
+                int radius_left_eye = sqrt(pow(point_38.x() - avgLeftEyeX,2) + pow(point_39.y() - avgLeftEyeY,2));
+
+                std::vector<cv::Point> right_eye;
+                dlib::point point_43 = face.part(43);
+                dlib::point point_42 = face.part(42);
+                int avg42Y = (((point_42.y() + point_43.y())/(2.0)));
+                right_eye.push_back(cv::Point(point_42.x(), avg42Y));
+                int avgRightEyeY = (point_42.y() + point_43.y())/(2.0);
+                int avgRightEyeX = (point_42.x() + point_43.x())/(2.0);
+                int radius_right_eye = sqrt(pow(point_43.x() - avgRightEyeX,2) + pow(point_42.y() - avgRightEyeY,2));
+                for (int point = 43; point <= 45; point++) {
+                    right_eye.push_back(getPointFromDlib(face, point));
+                }
+                
+                std::vector<cv::Point> mouth;
+                mouth.push_back(getPointFromDlib(face, 48));
+                mouth.push_back(getPointFromDlib(face, 67));
+                mouth.push_back(getPointFromDlib(face, 62));
+                mouth.push_back(getPointFromDlib(face, 65));
+                mouth.push_back(getPointFromDlib(face, 54));
+
+                std::vector<cv::Point> face_border;
+                for (int point = 0; point <= 16; point++) {
+                    face_border.push_back(getPointFromDlib(face, point));
+                }
+
+                cv::circle(dst, getPointFromDlib(face, 32), radius_left_eye/4, Scalar(1,1,1), -1);
+                cv::circle(dst, getPointFromDlib(face, 34), radius_left_eye/4, Scalar(1,1,1), -1);
+                cv::circle(dst, cv::Point(point_38.x(), point_39.y()), radius_left_eye, Scalar(1,1,1), -1);
+                cv::circle(dst, cv::Point(point_43.x(), point_42.y()), radius_right_eye, Scalar(1,1,1), -1);
+
+                // draws the curve using polylines and line width (BLACK)
+                cv::polylines(dst, mouth, false, Scalar(1, 1, 1), (point_39.x()-point_38.x())/4.25);
+                cv::polylines(dst, right_eye, false, Scalar(1, 1, 1), (point_39.x()-point_38.x())/4.2);
+                cv::polylines(dst, left_eye, false, Scalar(1, 1, 1), (point_39.x()-point_38.x())/4.2);
+                cv::polylines(dst, left_eyebrows, false, Scalar(1, 1, 1), (point_39.x()-point_38.x())/6.15);
+                cv::polylines(dst, right_eyebrows, false, Scalar(1, 1, 1), (point_39.x()-point_38.x())/6.15);
+                cv::polylines(dst, face_border, false, Scalar(1, 1, 1), (point_39.x()-point_38.x())/6.15);
+
+            }
+            
             // Visualize the final image
-            imshow("Final Result", dst);
+            cv::Mat transparentText;
+            cv::inRange(dst, cv::Scalar(0,0,0), cv::Scalar(0,0,0), transparentText);
 
-            dlib::array2d<rgb_pixel> dlibImage;
-            dlib::assign_image(dlibImage, dlib::cv_image<rgb_pixel>(dst));
+            cv::Mat result = src.clone();
+            dst.copyTo(result, 255-transparentText);
+            imshow("Final Result 2", result);
 
-            // Now let's view our face poses on the screen.
-            win.clear_overlay();
-            win.set_image(dlibImage);
-            win.add_overlay(render_face_detections(shapes));
+            // dlib::array2d<rgb_pixel> dlibImage;
+            // dlib::assign_image(dlibImage, dlib::cv_image<rgb_pixel>(dst));
+
+            // // Now let's view our face poses on the screen.
+            // win.clear_overlay();
+            // win.set_image(dlibImage);
+            // win.add_overlay(shapes);
             
             cv::waitKey(0);
 
@@ -260,6 +335,11 @@ int main(int argc, char **argv)
         cout << "\nexception thrown!" << endl;
         cout << e.what() << endl;
     }
+}
+
+cv::Point getPointFromDlib(dlib::full_object_detection face, int location) {
+    dlib::point pt = face.part(location);
+    return cv::Point(pt.x(), pt.y());
 }
 
 // ----------------------------------------------------------------------------------------
